@@ -1,0 +1,250 @@
+---
+R.version.string
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(psych)
+library(EFAtools)
+library(janitor)
+library(lavaan)
+library(semTools)
+library(semPlot)
+```
+
+```{r}
+data_sem <- read_excel("data_is_real.xlsx") %>%
+            select(AT1:AI4) %>%
+            select(-AI1, -SN3, -PBC4)
+  
+```
+
+```{r}
+summary(data_sem)
+```
+
+```{r}
+# Calculate correlation matrix
+cor_matrix <- cor(data_sem)
+
+# Print correlation matrix
+print(cor_matrix, method = "spearman")
+```
+
+# EFA test
+
+```{r}
+KMO(data_sem)
+```
+
+```{r}
+fa.parallel(data_sem, 
+            fa = "fa")
+```
+
+```{r}
+fan <- fa(r = data_sem,
+   nfactors = 5,  
+   fm = "ml",
+   rotate = "varimax")
+
+print(fan$loadings,
+      cutoff = 0.5,
+      sort = TRUE)
+
+print(fan, sort=TRUE)
+fa.diagram(fan)
+
+```
+
+```{r}
+alpha(data_sem, 
+      check.keys=TRUE)
+```
+
+# CFA test
+
+```{r}
+library(lavaan)
+library(semTools)
+library(semPlot)
+
+model <- '
+  AT =~ AT1 + AT2 + AT3
+  SN =~ SN1 + SN2 + SN4 
+  PBC =~ PBC1 + PBC2 + PBC3
+  PV =~ PV1 + PV2 + PV3 + PV4
+  AI =~ AI2 + AI3 + AI4
+'
+
+# Fit the CFA model
+fit <- cfa(model, 
+           data = data_sem)
+
+# Summary of model fit
+summary(fit, 
+        fit.measures = TRUE, 
+        standardized = TRUE)
+
+# Plot the path diagram
+semPaths(fit, "std", 
+         edge.label.cex = 0.8)
+```
+
+#### Fit and Compare models
+
+```{r}
+fitmeasures(fit, fitmeasures = c("chisq",
+                                 "df", 
+                                 "gfi", 
+                                 "agfi", 
+                                 "nfi",
+                                 "cfi",
+                                 "rmsea",
+                                 "srmr",
+                                 "ifi")) 
+```
+
+# : SEM
+
+```{r}
+# Load the necessary libraries
+library(lavaan)
+library(semTools)
+library(semPlot)
+
+# Specify the SEM model
+sem_model <- '
+  # Measurement model
+  AT =~ AT1 + AT2 + AT3
+  SN =~ SN1 + SN2 + SN4 
+  PBC =~ PBC1 + PBC2 + PBC3
+  PV =~ PV1 + PV2 + PV3 + PV4
+  AI =~ AI2 + AI3 + AI4
+  
+  # Structural model
+  AI ~ AT + SN + PBC + PV
+'
+
+# Fit the SEM model
+fit_sem <- sem(sem_model, data = data_sem)
+
+
+# Summary of model fit
+summary(fit_sem, fit.measures = TRUE, standardized = TRUE)
+
+# sem plot
+semPaths(fit_sem,
+         whatLabels="std", 
+         style="lisrel",
+         edge.label.cex=0.5, 
+         nCharNodes=0, 
+         nCharEdges=0, 
+         sizeMan=4, sizeMan2=3,
+         sizeLat=6.5, sizeLat2=7,
+         sizeInt=8,
+         edge.color="black", 
+         esize=0.6, 
+         asize=1.2, 
+         residuals=FALSE,
+         layout="tree", 
+         rotation=2,
+         borders=TRUE,
+         mar=c(4, 5, 5, 7))
+
+```
+
+```{r}
+semPaths(fit_sem,
+         whatLabels="std", 
+         style="ram",
+         edge.label.cex=0.5, 
+         nCharNodes=0, 
+         nCharEdges=0, 
+         sizeMan=4, sizeMan2=3,
+         sizeLat=6.5, sizeLat2=7,
+         sizeInt=8, sizeInt2=6,
+         edge.color="black", 
+         esize=0.6, 
+         asize=1.5, 
+         residuals=FALSE,
+         layout="spring", 
+         rotation=2,
+         borders=TRUE,
+         mar=c(3, 4, 4, 6))
+```
+
+## : AVEs and Alpha
+
+```{r}
+
+# Cronbach Alpha
+alpha_results <- alpha(data_sem)
+print(alpha_results)
+
+
+# Calculate the reliability for the fitted model
+reliability_data <- reliability(fit_sem)
+print(reliability_data)
+
+library(semTools)
+# Assuming 'fit' is your fitted model object from lavaan
+ave_values <- AVE(fit_sem)
+print(ave_values)
+```
+
+## : Descriptive
+
+```{r}
+library(gtsummary)
+data <- read_excel("data_is_real.xlsx") %>%
+  select(gender, year, region, major, background) %>% 
+  
+  tbl_summary(type = list(region ~ "categorical", 
+                          major ~ "categorical", 
+                        
+  background ~ "categorical"))
+print(data)
+```
+
+# : Rating Visualization
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(viridis) 
+
+
+df <- read_excel("data_real_copy.xlsx") %>% 
+  select(major, AI2, AI3, AI4) %>%
+  mutate(major = case_when(
+    major == "Agricultural Communication" ~ "Communication",
+    major == "Agricultural development" ~ "Development",
+    major == "Animal Production Technology and Meat Science" ~ "Animal",
+    major == "Aquatic Animal Production and Resource Management" ~ "Aquatic",
+    major == "Economics and Business for Agriculture Development" ~ "Business",
+    major == "Plant production technology" ~ "Plant",
+    major == "Smart Farm" ~ "smart",
+    TRUE ~ major))
+
+
+df_long <- df %>% 
+  pivot_longer(
+    cols = starts_with("AI"),
+    names_to = "Intention",
+    values_to = "Score")
+
+# Create the plot
+ggplot(df_long, aes(x = major, y = Score, fill = Intention)) +
+  geom_bar(stat = "summary", fun = "mean", position = position_dodge(width = 0.7)) +
+  scale_fill_viridis_d(name = "") +  # Remove the legend title
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5),
+        panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        axis.title.x = element_blank(),  # Remove x-axis title
+        axis.title.y = element_blank()) +  # Remove y-axis title
+  ylim(NA, 7)
+
+```

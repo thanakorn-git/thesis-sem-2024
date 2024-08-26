@@ -1,0 +1,143 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Library
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(lavaan)
+library(psych)
+library(EFAtools)
+```
+
+```{r}
+simmux <- read_excel("1-s2.0-S2214367X19302492-mmc1.xlsx") %>%
+  select(BT1:LS5) %>% 
+  select(-starts_with("BTER"),-SQcomparison) %>%
+  select(-starts_with("BCM")) %>%
+  select(-starts_with("WOM")) %>%
+  select(-starts_with("PV"))  %>%
+  select(-starts_with("BT3"))
+```
+
+```{r}
+summary(simmux)
+```
+
+```{r}
+cor_matrix <- cor(simmux)
+
+# Print correlation matrix
+print(cor_matrix, method = "spearman")
+```
+
+
+# Exploratory factor analysis (EFA)
+สามารถบอกได้ว่าตัวแปรใดบ้างที่สัมพันธ์กันและควรจัดกลุ่มเป็นปัจจัยเดียวกัน
+## BARTLETT
+บาเร็ตเทสจะตรวจสอบว่าตัวเเปรขอิงเราเหมาะสมไหมกับการวิเคราะห์ปัจจัย(factor analysis) หรือไม่อย่างไร
+ผ่านการตรวจสอบค่าsigเเละอัลฟ่า
+
+ex.✔ The Bartlett's test of sphericity was significant at an alpha level of .05.
+  These data are probably suitable for factor analysis.
+```{r}
+bartlett.test(simmux)
+BARTLETT(simmux)
+```
+
+## SAMPLING ADEQUACY (ความเพียงพอสำหรับการสุ่มตัวอย่าง)
+ถ้าตัวอย่างได้เเค่ 0.6สามารถเลือกว่าจะลบหรือว่าจะทำต่อเพราะว่าอาจจะเกิดความไม่น่าเชื่อถือหรือ
+ไม่เหมาะสมได้
+ex.✔ The overall KMO value for your data is marvellous.
+  These data are probably suitable for factor analysis.
+```{r}
+KMO(simmux)
+```
+ค่า(KMO)
+> 0.90 = marvellous
+> 0.80 = meritorous
+> 0.70 = middling (target minimun)
+> 0.60 = mediocre
+> 0.50 = miserable
+less0.50 = unacceptable
+
+
+## SCREE TEST 
+SCREE TEST ของเราจะเป็นการนำตัวเเปรที่มีความเหมือนกัน(simmilarity)จากคำถามหรือตัวเเปร(VARIABLE)ของเรามารวมกัน
+อีกความหมายนึงคือนำตัวเเปรทั้ง24ตัวมาระบุว่าเป็นปัจจัยที่เเบ่งเเยกได้ทั้งหมดกี่ปัจจัย
+
+นำความเหมือนมาเชื่อมโยงเข้ากับ(independent var)
+principle component analysis(PCA)เป็นการรวมปัจจัยที่มีความคล้ายกันรวมเข้าด้วยกันเป็นหนึ่งปัจจัยหรือๅตัวเเปร
+```{r}
+psych::scree(simmux)
+```
+
+## PARARELL TEST
+```{r}
+PARALLEL(simmux, eigen_type = "EFA")
+fa.parallel(simmux, fa = "fa")
+```
+เหมือนกันกับSCREE TEST เเต่เป็นขั้นกว่าอามณ์เเบบขั้นiimproveเเล้ว
+Pararell test ใช้ข้อมูลสุ่มเพื่อกำหนดเกณฑ์การตัดสินใจ ทำให้มีความแปรปรวนน้อยและความน่าเชื่อถือสูงเมื่อเทียบกับ Scree Test ที่มักจะขึ้นอยู่กับการตัดสินใจเป็นหลัก
+
+
+# FACTOR EXTRACTION
+เป็นการนำตัวเเปรของเราหทั้งหมดมาจำเเนกเป็นเเต่ละปัจจัย(factor secion) 
+เเละทำการระบุว่าตัวเเปรไหนควรอยู่ในปัจจัยไรหลังจากที่คำนว Number of possible factor!!!
+
+```{r}
+fanone <- fa(r = simmux,
+   nfactors = 6,
+   rotate = "none")
+
+print(fanone$loadings,
+      cutoff = 0.3)
+```
+
+
+ตัวอย่างที่สองในการเปรียบเทียบ
+```{r}
+fan <- fa(r = simmux,
+   nfactors = 6,  
+   fm = "ml",
+   rotate = "varimax")
+
+print(fan$loadings,
+      cutoff = 0.5,
+      sort = TRUE)
+```
+
+เเสดงออกมาเป็น diagram
+```{r}
+# View results
+print(fan, sort=TRUE)
+fa.diagram(fan)
+```
+
+
+#CFA confirmatory factor analysis
+เป็นกระบวนการวิเคราะห์ปัจจัยที่เรามีสมมติฐานหรือโครงสร้างของปัจจัยเริ่มต้นแล้ว และต้องการทดสอบว่าโครงสร้างนั้นตรงกับข้อมูลหรือไม่ หลังจากที่วิเคราะห์ EFAเเล้ว!!!
+concpetual framework VS emprical framework : หรือนำกรอบเเนวคิดงานวิจัยของเรามาเทียบกับCFA
+## measurement model = CFA
+## structural model  = SEM
+
+```{r}
+pls_mm_ebus <- 
+  constructs(
+  composite("tangible", multi_items("bt", c(1:2, 5:7))),
+  composite("drivers_quality", multi_items("bd", 1:4)),
+  composite("empathy", multi_items("emp", 1:5)),
+  composite("env_perf", multi_items("ep", 1:4)),
+  composite("customer_sat", multi_items("cs", 1:3 )),
+  composite("life_sat", multi_items("ls", 1:5))
+)
+
+plot(pls_mm_ebus),plot
+```
+
+
+
